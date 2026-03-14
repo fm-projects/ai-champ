@@ -1,0 +1,7 @@
+README.md
+pyproject.toml
+src/ai_champ.egg-info/PKG-INFO
+src/ai_champ.egg-info/SOURCES.txt
+src/ai_champ.egg-info/dependency_links.txt
+src/ai_champ.egg-info/requires.txt
+src/ai_champ.egg-info/top_level.txt

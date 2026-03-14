@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: ai-champ
+Version: 0.0.1
+Author-email: name <your_email@example.com>
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: torch
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scikit-learn
+
+# ai-champ
+## Installation
+
+```bash
+conda env create -f environment.yml
+conda activate ai-champ
+```
