@@ -13,13 +13,13 @@ from transformers import (
 import evaluate
 
 # --- КОНФИГУРАЦИЯ ---
-MODEL_NAME = "cointegrated/rubert-tiny2"
+MODEL_NAME = "DeepPavlov/rubert-base-cased"
 DATA_PATH = "../data/train_dataset.tsv"
 OUTPUT_DIR = "../models/rubert_ner"
 MAX_LEN = 256
 BATCH_SIZE = 64
-EPOCHS = 32
-LEARNING_RATE = 1e-4
+EPOCHS = 8
+LEARNING_RATE = 5e-5
 
 def parse_targets(s):
     if pd.isna(s) or s == 'empty': return []
@@ -133,7 +133,8 @@ def main():
         MODEL_NAME,
         num_labels=len(label2id),
         id2label=id2label,
-        label2id=label2id
+        label2id=label2id,
+        use_safetensors=True
     )
     
     # 5. Метрики (используем seqeval для точного расчета F1 по сущностям)
