@@ -18,6 +18,8 @@ dependencies:
   - torchvision
   - torchaudio
   - pytorch-cuda=12.4
+  - jupyterlab
+  - ipywidgets
   - pip:
     - -e .
     - ipykernel
