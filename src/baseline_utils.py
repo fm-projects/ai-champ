@@ -4,6 +4,8 @@
 import ast
 import csv
 import hashlib
+import os
+import random
 import re
 from typing import Dict, List, Sequence, Tuple
 
@@ -39,6 +41,24 @@ except Exception:  # pragma: no cover
 # =========================
 # I/O and metrics
 # =========================
+
+
+def configure_determinism(seed: int = 42, threads: int = 1) -> None:
+    """Configure reproducible execution for python + common numeric stack."""
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    os.environ["MKL_NUM_THREADS"] = str(threads)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(threads)
+    os.environ["NUMEXPR_NUM_THREADS"] = str(threads)
+
+    random.seed(seed)
+
+    try:
+        import numpy as np  # type: ignore
+
+        np.random.seed(seed)
+    except Exception:
+        pass
 
 def parse_target(value: str) -> List[Span]:
     parsed = ast.literal_eval(value)
@@ -144,7 +164,7 @@ def per_category_f1(y_true: Sequence[Sequence[Span]], y_pred: Sequence[Sequence[
         support = sum(len(row) for row in true_cat)
         report.append((category, metrics["f1"], support))
 
-    return sorted(report, key=lambda item: item[1], reverse=True)
+    return sorted(report, key=lambda item: (-item[1], item[0]))
 
 
 # =========================
@@ -408,9 +428,9 @@ POSTAL_RX = re.compile(r"(?<!\d)\d{6}(?!\d)")
 BIRTH_AFTER_RX = re.compile(r"(?:место рождения\s*[:\-]?\s*|родил(?:ся|ась)\s+в\s+|урожен(?:ец|ка)?\s+)([А-ЯЁ][^,.;\n]{2,40})")
 BIRTH_PLACE_QUOTED_RX = re.compile(r"[\"«]([А-ЯЁ][А-Яа-яЁё\- ]{2,45})[\"»]")
 REG_DATE_TEXT_RX = re.compile(
-    r"(?:(?:с|до)\s+)?(?:0?[1-9]|[12]\d|3[01])\s+"
+    r"(?:(?:с|до)\s+)?((?:0?[1-9]|[12]\d|3[01])\s+"
     r"(?:января|февраля|марта|апреля|мая|июня|июля|августа|сентября|октября|ноября|декабря)"
-    r"(?:\s+(?:19\d{2}|20\d{2})\s+года)?",
+    r"(?:\s+(?:19\d{2}|20\d{2})(?:\s+года)?)?)",
     re.IGNORECASE,
 )
 WEEKDAY_RX = re.compile(
@@ -778,10 +798,14 @@ def detect_registration_dates(text: str) -> List[Span]:
     if not any(key in lower_text for key in ("регистрац", "прописк", "жительства", "пребывания", "зарегистр")):
         return spans
 
-    for regex in (PASSPORT_DATE_RX, REG_DATE_TEXT_RX):
-        for match in regex.finditer(text):
-            if _near_keywords(text, match.start(), match.end(), REG_CONTEXT, window=52):
-                _add_span(spans, text, match.start(), match.end(), "Дата регистрации по месту жительства или пребывания")
+    for match in PASSPORT_DATE_RX.finditer(text):
+        if _near_keywords(text, match.start(), match.end(), REG_CONTEXT, window=52):
+            _add_span(spans, text, match.start(), match.end(), "Дата регистрации по месту жительства или пребывания")
+    for match in REG_DATE_TEXT_RX.finditer(text):
+        # group 1 is the actual date without leading preposition "с"/"до"
+        s, e = match.span(1) if match.lastindex else (match.start(), match.end())
+        if _near_keywords(text, s, e, REG_CONTEXT, window=52):
+            _add_span(spans, text, s, e, "Дата регистрации по месту жительства или пребывания")
     return spans
 
 
