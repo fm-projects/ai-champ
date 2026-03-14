@@ -153,30 +153,42 @@ def predict_ner(texts, model, tokenizer, id2label, device):
     return batch_entities
 
 
+def spans_overlap(a, b):
+    return max(a[0], b[0]) < min(a[1], b[1])
+
 def resolve_conflicts(bert_entities, heuristic_entities):
     """
-    Объединяет предсказания нейросети и эвристик.
-    При пересечении приоритет у эвристик.
+    Более аккуратное объединение:
+    1. эвристики добавляем сразу
+    2. BERT-спан выкидываем только если он пересекается
+       с ЭВРИСТИКОЙ ТОГО ЖЕ КЛАССА
+    3. если классы разные, оставляем оба
     """
     final_entities = heuristic_entities.copy()
 
     for bert_ent in bert_entities:
-        b_start, b_end, _ = bert_ent
-        has_overlap = False
+        b_start, b_end, b_label = bert_ent
+        drop_bert = False
 
         for h_ent in heuristic_entities:
-            h_start, h_end, _ = h_ent
-            if max(b_start, h_start) < min(b_end, h_end):
-                has_overlap = True
-                break
+            h_start, h_end, h_label = h_ent
 
-        if not has_overlap:
+            if spans_overlap(bert_ent, h_ent):
+                # выбиваем BERT только если класс тот же
+                if b_label == h_label:
+                    drop_bert = True
+                    break
+
+        if not drop_bert:
             final_entities.append(bert_ent)
+
+    # дедупликация
+    final_entities = list(dict.fromkeys(final_entities))
 
     if not final_entities:
         return "[]"
 
-    final_entities = sorted(final_entities, key=lambda x: x[0])
+    final_entities = sorted(final_entities, key=lambda x: (x[0], x[1], x[2]))
     return str(final_entities)
 
 
