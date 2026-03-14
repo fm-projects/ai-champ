@@ -28,61 +28,72 @@ MAX_LEN = 256
 BATCH_SIZE = 32
 
 
+# --- НАСТРОЙКИ ЭВРИСТИК ---
+
+HEURISTIC_TARGET_WHITELIST = {
+    # "Email",
+    "Дата окончания срока действия карты",
+    "CVV/CVC",
+    # "ПИН код",
+    "Номер карты",
+    # "Номер банковского счета",
+    "Водительское удостоверение",
+    "Серия и номер вида на жительство",
+    "Паспортные данные",
+    "Дата рождения",
+    "Дата регистрации по месту жительства или пребывания",
+}
+
+ENABLE_BASE_RULES = True            # базовые регулярки
+ENABLE_PASSPORT_HEURISTIC = True    # доп паспорт
+ENABLE_VNZ_HEURISTIC = True         # доп "Серия и номер вида на жительство"
+ENABLE_BIRTH_DATE_HEURISTIC = True  # доп с датами рождения
+
+
+def _safe_collect_spans(detector_fn, text):
+    """
+    Безопасно вызывает эвристику и возвращает список span.
+    """
+    if detector_fn is None:
+        return []
+
+    try:
+        spans = detector_fn(text)
+        if not spans:
+            return []
+        return [s for s in spans if isinstance(s, (list, tuple)) and len(s) == 3]
+    except Exception:
+        return []
+
+
 def apply_heuristics(text):
     """
-    Используем высокоточные эвристики из baseline_utils и оставляем
-    только целевые категории, которые хотим добавить в пайплайн.
+    Применяет включенные эвристики и оставляет только категории из whitelist.
+    
+    Управление:
+    - HEURISTIC_TARGET_WHITELIST: какие классы вообще разрешены
+    - ENABLE_*: какие эвристики реально включены
     """
-    selected = {
-        "Email",
-        "Дата окончания срока действия карты",
-        "CVV/CVC",
-        "ПИН код",
-        "Номер карты",
-        "Номер банковского счета",
-        "Водительское удостоверение",
-        "Серия и номер вида на жительство",
-        "Паспортные данные",
-        "Дата рождения",
-        "Дата регистрации по месту жительства или пребывания",
-    }
-
     spans = []
 
-    # Базовые правила
-    try:
-        spans.extend(rules_predict(text))
-    except Exception:
-        pass
+    heuristic_sources = [
+        (ENABLE_BASE_RULES, rules_predict),
+        (ENABLE_PASSPORT_HEURISTIC, detect_passport_details),
+        (ENABLE_VNZ_HEURISTIC, detect_vnz),
+        (ENABLE_BIRTH_DATE_HEURISTIC, detect_birth_date_tokens),
+    ]
 
-    # Усиление по паспорту
-    if detect_passport_details is not None:
-        try:
-            spans.extend(detect_passport_details(text))
-        except Exception:
-            pass
+    for is_enabled, detector_fn in heuristic_sources:
+        if is_enabled:
+            spans.extend(_safe_collect_spans(detector_fn, text))
 
-    # Усиление по ВНЖ
-    if detect_vnz is not None:
-        try:
-            spans.extend(detect_vnz(text))
-        except Exception:
-            pass
+    # оставляем только разрешенные категории
+    spans = [s for s in spans if s[2] in HEURISTIC_TARGET_WHITELIST]
 
-    # Усиление по дате рождения
-    if detect_birth_date_tokens is not None:
-        try:
-            spans.extend(detect_birth_date_tokens(text))
-        except Exception:
-            pass
-
-    # Оставляем только нужные категории
-    spans = [s for s in spans if len(s) == 3 and s[2] in selected]
-
-    # Убираем дубликаты
+    # дедупликация
     uniq = {}
-    for s in spans:
-        uniq[(s[0], s[1], s[2])] = s
+    for start, end, label in spans:
+        uniq[(start, end, label)] = (start, end, label)
 
     return list(uniq.values())
 
