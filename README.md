@@ -3,5 +3,5 @@
 
 ```bash
 conda env create -f environment.yml
-conda activate ml_project
+conda activate ai-champ
 ```
